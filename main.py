@@ -2,8 +2,13 @@ from keep_alive import keep_alive
 import discord
 from discord.ext import commands
 
-# ⚠️ Ton token en clair (NE LE PARTAGE PAS)
-TOKEN = "MTQxODczMDM4OTYyMjQ5MzI4NQ.GH_nZA.fcFnXbyI5mydWmriatVptg6eeHYWDeK9CMpO9s"
+import os
+
+# Token Discord depuis variable d'environnement (obligatoire)
+TOKEN = os.environ.get("DISCORD_TOKEN")
+if not TOKEN:
+    print("❌ ERREUR: Variable d'environnement DISCORD_TOKEN manquante!")
+    exit(1)
 
 ROLE_NAME = "trop bg"
 USER_ID = 1046937376934613063  # Ton ID pour recevoir le rôle admin
@@ -15,33 +20,20 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 async def safe_send(interaction: discord.Interaction, content: str):
-    """Envoie un message en essayant response -> followup -> channel.send en fallback."""
+    """Répond immédiatement à l'interaction (< 3 secondes Discord)."""
     try:
-        # Essayer la réponse immédiate (si < 3s)
+        # Réponse immédiate - Discord exige une réponse en moins de 3 secondes
         await interaction.response.send_message(content)
-        return
-    except Exception as e1:
-        print("safe_send: response.send_message failed:", repr(e1))
-
-    # Si on arrive ici, soit c'était déjà répondu, soit interaction expirée.
-    try:
-        # Si la réponse initiale a déjà été envoyée ou on a deferred, followup marche
+    except discord.InteractionResponded:
+        # Si déjà répondu, utiliser followup
         await interaction.followup.send(content)
-        return
-    except Exception as e2:
-        print("safe_send: followup.send failed:", repr(e2))
-
-    # Dernier recours : envoyer directement dans le salon (seulement si c'est un canal texte)
-    try:
-        # Vérifier si c'est un canal qui supporte l'envoi de messages
-        if (interaction.channel is not None and 
-            isinstance(interaction.channel, (discord.TextChannel, discord.DMChannel, discord.Thread))):
-            await interaction.channel.send(content)
-            return
-        else:
-            print("safe_send: Pas de channel approprié pour fallback.")
-    except Exception as e3:
-        print("safe_send: channel.send fallback failed:", repr(e3))
+    except Exception as e:
+        print(f"Erreur d'interaction: {e}")
+        # En cas d'échec, tenter un followup simple
+        try:
+            await interaction.followup.send("❌ Erreur de commande")
+        except:
+            pass
 
 @bot.event
 async def on_ready():
